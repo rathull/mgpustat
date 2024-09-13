@@ -9,6 +9,7 @@ from rich.console import Console
 from rich.table import Table
 from rich import box
 
+
 def get_gpu_info():
     cmd = ["system_profiler", "SPDisplaysDataType", "-json"]
     result = subprocess.run(cmd, capture_output=True, text=True)
@@ -20,48 +21,71 @@ def get_gpu_info():
         "memory": gpu_info.get("spdisplays_vram", "Unknown"),
     }
 
+
 def get_gpu_usage():
-    cmd = ["sudo", "powermetrics", "-s", "gpu_power", "-i", "1000", "-n", "1", "--show-process-energy"]
+    cmd = [
+        "sudo",
+        "powermetrics",
+        "-s",
+        "gpu_power",
+        "-i",
+        "1000",
+        "-n",
+        "1",
+        "--show-process-energy",
+    ]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    lines = result.stdout.split('\n')
+    lines = result.stdout.split("\n")
 
     gpu_usage = {}
     engine_usage = {}
-    
+
     for line in lines:
         if "GPU Active residency" in line:
-            match = re.search(r'(\d+\.\d+)%', line)
+            match = re.search(r"(\d+\.\d+)%", line)
             if match:
                 gpu_usage["active"] = float(match.group(1))
         elif "GPU Idle residency" in line:
-            match = re.search(r'(\d+\.\d+)%', line)
+            match = re.search(r"(\d+\.\d+)%", line)
             if match:
                 gpu_usage["idle"] = float(match.group(1))
         elif "GPU " in line and " active residency" in line:
-            parts = line.split(':')
+            parts = line.split(":")
             if len(parts) == 2:
-                engine = parts[0].split('GPU ')[1].split(' active')[0].strip()
-                match = re.search(r'(\d+\.\d+)%', parts[1])
+                engine = parts[0].split("GPU ")[1].split(" active")[0].strip()
+                match = re.search(r"(\d+\.\d+)%", parts[1])
                 if match:
                     usage = float(match.group(1))
                     engine_usage[engine] = usage
 
     return gpu_usage, engine_usage
 
+
 def get_top_processes():
     cmd = ["ps", "-A", "-o", "pid,%cpu,comm"]
     result = subprocess.run(cmd, capture_output=True, text=True)
-    lines = result.stdout.split('\n')[1:]  # Skip header
+    lines = result.stdout.strip().split("\n")
     processes = []
-    for line in lines:
+    for line in lines[1:]:  # Skip the header row
         if line.strip():
-            pid, cpu, name = line.split(None, 2)
-            processes.append({"pid": pid, "cpu": float(cpu), "name": name})
-    return sorted(processes, key=lambda x: x['cpu'], reverse=True)[:5]
+            parts = line.split(None, 2)
+            if len(parts) == 3:
+                pid, cpu, name = parts
+                try:
+                    cpu_float = float(cpu)
+                    processes.append({"pid": pid, "cpu": cpu_float, "name": name})
+                except ValueError:
+                    continue  # Skip lines where CPU can't be converted to float
+    return sorted(processes, key=lambda x: x["cpu"], reverse=True)[:5]
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Display GPU statistics for Apple Silicon Macs")
-    parser.add_argument("-i", "--interval", type=int, default=1, help="Update interval in seconds")
+    parser = argparse.ArgumentParser(
+        description="Display GPU statistics for Apple Silicon Macs"
+    )
+    parser.add_argument(
+        "-i", "--interval", type=int, default=1, help="Update interval in seconds"
+    )
     args = parser.parse_args()
 
     console = Console()
@@ -98,11 +122,14 @@ def main():
         process_table.add_column("Process Name", style="green")
 
         for process in top_processes:
-            process_table.add_row(process["pid"], f"{process['cpu']:.2f}%", process["name"])
+            process_table.add_row(
+                process["pid"], f"{process['cpu']:.2f}%", process["name"]
+            )
 
         console.print(process_table)
 
         time.sleep(args.interval)
+
 
 if __name__ == "__main__":
     main()

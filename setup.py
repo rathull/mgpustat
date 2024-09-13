@@ -16,6 +16,9 @@ setup(
     install_requires=[
         "rich",
     ],
+    extras_require={
+        "dev": ["pytest", "pre-commit"],
+    },
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
